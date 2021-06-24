@@ -1,0 +1,92 @@
+---
+title: "voting-data"
+author: "Janna Ramadan"
+date: "3/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(rtweet)
+library(tidytext)
+library(dplyr)
+
+library(readr)
+library(gganimate)
+library(shiny)
+library(textdata)
+library(rsample)
+library(gtsummary)
+library(gt)
+library(broom.mixed)
+```
+
+
+```{r data}
+UNVotesALL <- read_csv("~/Desktop/Courses/Concentration/gov50/UNVotes.csv") 
+
+UNVotesC <- read_csv("~/Desktop/Courses/Concentration/gov50/UNVotes.csv") %>%
+  filter(Countryname == "China")
+```
+
+
+
+```{r data - harry}
+
+setwd("~/Desktop/Courses/Concentration/gov50/")
+
+votes <- data.table::fread("UNVotes.csv") 
+votes <- votes[-which(votes$year<2005),]
+votes$vote_y <- ifelse(votes$vote == 1, 1, 0) #Can figure oht outher way to do the voting if you want, this is a crude one
+votes2 <- votes[-which(votes$unres ==""),]
+votes2 <- votes2[-which(votes2$Country =="YUG"),]
+
+votes2 <- votes2 %>% #filter(year>2010)
+  dplyr::select(resid, ccode, vote_y) %>%
+  spread(resid, vote_y)
+
+votes2 <- votes2[-which(rowSums(is.na(votes2))>0),]
+votes2$ccode <- countrycode::countrycode(votes2$ccode, origin = "cown", destination = "iso3c")
+
+###Two dimension version
+d <- dist(votes2[,2:ncol(votes2)]) # euclidean distances between the rows
+fit <- cmdscale(d,eig=TRUE, k=2) # k is the number of dimensions
+mds <- fit$points %>%
+  as_tibble()
+mds$ccode <- votes2$ccode
+colnames(mds)[1:2] <- c("Dim.1", "Dim.2")
+
+ggpubr::ggscatter(mds, x = "Dim.1", y = "Dim.2", 
+          label = votes2$ccode,
+          size = 1,
+          repel = TRUE)
+
+country_df <- data.frame(
+  ccode = votes2$ccode,
+  us_dist = ((mds$Dim.1[which(mds$ccode == "USA")] - mds$Dim.1)^2 + (mds$Dim.2[which(mds$ccode == "USA")] - mds$Dim.2)^2)^.5,
+  cn_dist = ((mds$Dim.1[which(mds$ccode == "CHN")] - mds$Dim.1)^2 + (mds$Dim.2[which(mds$ccode == "CHN")] - mds$Dim.2)^2)^.5,
+  rus_dist = ((mds$Dim.1[which(mds$ccode == "RUS")] - mds$Dim.1)^2 + (mds$Dim.2[which(mds$ccode == "RUS")] - mds$Dim.2)^2)^.5
+)
+
+##one dimension version
+d <- dist(votes2[,2:ncol(votes2)]) # euclidean distances between the rows
+fit <- cmdscale(d,eig=TRUE, k=1) # k is the number of dimensions
+mds <- fit$points %>%
+  as_tibble()
+mds$ccode <- votes2$ccode
+colnames(mds)[1] <- c("Dim.1")
+
+
+mds %>% ggplot(aes(x = Dim.1, y =  fct_reorder(ccode, Dim.1))) + geom_point()
+
+country_df <- data.frame(
+  ccode = votes2$ccode,
+  us_dist = ((mds$Dim.1[which(mds$ccode == "USA")] - mds$Dim.1)^2)^.5,
+  cn_dist = ((mds$Dim.1[which(mds$ccode == "CHN")] - mds$Dim.1)^2)^.5,
+  rus_dist = ((mds$Dim.1[which(mds$ccode == "RUS")] - mds$Dim.1)^2)^.5
+)
+```
+
